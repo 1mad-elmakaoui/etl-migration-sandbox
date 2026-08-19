@@ -1,0 +1,908 @@
+{
+  "migration_id": "mig-20260819T112356-dd7f5f32",
+  "source_path": "/home/imad/autonomous-etl/examples/customer_pipeline/legacy_pipeline.py",
+  "created_at": "2026-08-19T11:23:56.279633Z",
+  "stage": "pull_request",
+  "spec": {
+    "source_path": "examples/customer_pipeline/legacy_pipeline.py",
+    "source_language": "python_pandas",
+    "summary": "Computes total order revenue per country, counting only adult customers. Customer and order CSVs are joined on customer_id with a left join, revenue is derived as quantity * price, and the result is grouped by country and written to a single CSV.",
+    "inputs": [
+      {
+        "name": "customers",
+        "path_expression": "os.path.join(input_dir, 'customers.csv')",
+        "format": "csv",
+        "read_options": {
+          "header": "true"
+        },
+        "columns": [
+          {
+            "name": "customer_id",
+            "dtype": "int64",
+            "nullable": false,
+            "description": "Primary key.",
+            "example_values": [
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          {
+            "name": "name",
+            "dtype": "object",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          },
+          {
+            "name": "age",
+            "dtype": "float64",
+            "nullable": true,
+            "description": "float64 rather than int64 because 74 of 2000 values are null; pandas promotes int64 to float64 when nulls are present.",
+            "example_values": [
+              "41.0",
+              "42.0",
+              "88.0"
+            ]
+          },
+          {
+            "name": "country",
+            "dtype": "object",
+            "nullable": true,
+            "description": "63 of 2000 values are null. This is the group key downstream.",
+            "example_values": [
+              "US",
+              "DE",
+              "MA"
+            ]
+          },
+          {
+            "name": "signup_date",
+            "dtype": "object",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          }
+        ],
+        "row_estimate": 2000,
+        "profiled": true
+      },
+      {
+        "name": "orders",
+        "path_expression": "os.path.join(input_dir, 'orders.csv')",
+        "format": "csv",
+        "read_options": {
+          "header": "true"
+        },
+        "columns": [
+          {
+            "name": "order_id",
+            "dtype": "int64",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          },
+          {
+            "name": "customer_id",
+            "dtype": "int64",
+            "nullable": false,
+            "description": "1600 distinct values against 2000 customers, so roughly 400 customers have no orders and will carry null revenue after the left join.",
+            "example_values": []
+          },
+          {
+            "name": "product",
+            "dtype": "object",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          },
+          {
+            "name": "quantity",
+            "dtype": "int64",
+            "nullable": false,
+            "description": null,
+            "example_values": [
+              "9",
+              "1",
+              "3"
+            ]
+          },
+          {
+            "name": "price",
+            "dtype": "float64",
+            "nullable": false,
+            "description": null,
+            "example_values": [
+              "47.76",
+              "6.12",
+              "456.21"
+            ]
+          },
+          {
+            "name": "order_date",
+            "dtype": "object",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          }
+        ],
+        "row_estimate": 4013,
+        "profiled": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "revenue_by_country",
+        "path_expression": "os.path.join(output_dir, 'revenue_by_country.csv')",
+        "format": "csv",
+        "mode": "overwrite",
+        "write_options": {
+          "index": "false"
+        },
+        "columns": [
+          {
+            "name": "country",
+            "dtype": "object",
+            "nullable": false,
+            "description": null,
+            "example_values": []
+          },
+          {
+            "name": "revenue",
+            "dtype": "float64",
+            "nullable": true,
+            "description": null,
+            "example_values": []
+          }
+        ]
+      }
+    ],
+    "transformations": [
+      {
+        "id": "t1",
+        "kind": "read",
+        "description": "Read the customers CSV.",
+        "inputs": [],
+        "output": "customers",
+        "source_lines": [
+          31
+        ],
+        "expression": "pd.read_csv(os.path.join(input_dir, 'customers.csv'))",
+        "columns_read": [],
+        "columns_written": [
+          "customer_id",
+          "name",
+          "age",
+          "country",
+          "signup_date"
+        ],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t2",
+        "kind": "read",
+        "description": "Read the orders CSV.",
+        "inputs": [],
+        "output": "orders",
+        "source_lines": [
+          32
+        ],
+        "expression": "pd.read_csv(os.path.join(input_dir, 'orders.csv'))",
+        "columns_read": [],
+        "columns_written": [
+          "order_id",
+          "customer_id",
+          "product",
+          "quantity",
+          "price",
+          "order_date"
+        ],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t3",
+        "kind": "filter",
+        "description": "Keep only customers aged 18 or over. Rows with a null age are dropped, because a NaN comparison evaluates to False in pandas.",
+        "inputs": [
+          "customers"
+        ],
+        "output": "customers",
+        "source_lines": [
+          34
+        ],
+        "expression": "customers[customers['age'] >= MIN_AGE]",
+        "columns_read": [
+          "age"
+        ],
+        "columns_written": [],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t4",
+        "kind": "derive_column",
+        "description": "Derive revenue as quantity multiplied by price.",
+        "inputs": [
+          "orders"
+        ],
+        "output": "orders",
+        "source_lines": [
+          36
+        ],
+        "expression": "orders['quantity'] * orders['price']",
+        "columns_read": [
+          "quantity",
+          "price"
+        ],
+        "columns_written": [
+          "revenue"
+        ],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t5",
+        "kind": "join",
+        "description": "Left join adult customers to their orders on customer_id. Customers with no orders are retained with null revenue.",
+        "inputs": [
+          "customers",
+          "orders"
+        ],
+        "output": "result",
+        "source_lines": [
+          38
+        ],
+        "expression": "customers.merge(orders, on='customer_id', how='left')",
+        "columns_read": [
+          "customer_id"
+        ],
+        "columns_written": [],
+        "join": {
+          "left": "customers",
+          "right": "orders",
+          "how": "left",
+          "left_keys": [
+            "customer_id"
+          ],
+          "right_keys": [
+            "customer_id"
+          ],
+          "broadcast_candidate": true
+        },
+        "aggregation": null
+      },
+      {
+        "id": "t6",
+        "kind": "aggregate",
+        "description": "Sum revenue per country. pandas drops rows whose country is null because groupby defaults to dropna=True.",
+        "inputs": [
+          "result"
+        ],
+        "output": "result",
+        "source_lines": [
+          40
+        ],
+        "expression": "result.groupby('country')['revenue'].sum()",
+        "columns_read": [
+          "country",
+          "revenue"
+        ],
+        "columns_written": [
+          "country",
+          "revenue"
+        ],
+        "join": null,
+        "aggregation": {
+          "group_by": [
+            "country"
+          ],
+          "aggregations": {
+            "revenue": "sum"
+          }
+        }
+      },
+      {
+        "id": "t7",
+        "kind": "reset_index",
+        "description": "Flatten the grouped index back into a column. Pure pandas bookkeeping with no effect on the data itself.",
+        "inputs": [
+          "result"
+        ],
+        "output": "result",
+        "source_lines": [
+          40
+        ],
+        "expression": "result.reset_index()",
+        "columns_read": [],
+        "columns_written": [],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t8",
+        "kind": "sort",
+        "description": "Sort the output by country.",
+        "inputs": [
+          "result"
+        ],
+        "output": "result",
+        "source_lines": [
+          42
+        ],
+        "expression": "result.sort_values(by='country')",
+        "columns_read": [
+          "country"
+        ],
+        "columns_written": [],
+        "join": null,
+        "aggregation": null
+      },
+      {
+        "id": "t9",
+        "kind": "write",
+        "description": "Write the result to CSV without the pandas index.",
+        "inputs": [
+          "result"
+        ],
+        "output": "revenue_by_country",
+        "source_lines": [
+          45
+        ],
+        "expression": "result.to_csv(..., index=False)",
+        "columns_read": [],
+        "columns_written": [],
+        "join": null,
+        "aggregation": null
+      }
+    ],
+    "business_rules": [
+      {
+        "id": "br1",
+        "description": "Only adult customers count towards revenue. Customers whose age is unknown are excluded rather than assumed adult.",
+        "transformation_ids": [
+          "t3"
+        ],
+        "criticality": "high"
+      },
+      {
+        "id": "br2",
+        "description": "Revenue is quantity times unit price; there is no discount or tax adjustment anywhere in the pipeline.",
+        "transformation_ids": [
+          "t4"
+        ],
+        "criticality": "high"
+      },
+      {
+        "id": "br3",
+        "description": "A customer with no orders still counts as a customer but contributes no revenue.",
+        "transformation_ids": [
+          "t5"
+        ],
+        "criticality": "medium"
+      },
+      {
+        "id": "br4",
+        "description": "Revenue attributed to customers whose country is unknown is excluded from the report entirely rather than reported under a placeholder.",
+        "transformation_ids": [
+          "t6"
+        ],
+        "criticality": "high"
+      }
+    ],
+    "risks": [
+      {
+        "id": "r1",
+        "category": "null_semantics",
+        "severity": "high",
+        "description": "pandas groupby drops null keys by default; Spark groupBy keeps null as its own group. The profiler measured 63 null countries out of 2000, so a naive translation produces one extra output row and different totals.",
+        "transformation_ids": [
+          "t6"
+        ],
+        "mitigation": "Filter out rows with a null country before groupBy, reproducing pandas dropna=True explicitly."
+      },
+      {
+        "id": "r2",
+        "category": "null_semantics",
+        "severity": "medium",
+        "description": "pandas sum() returns 0.0 for a group whose values are all NaN; Spark sum() returns null. Around 400 customers have no orders, so all-null groups are reachable.",
+        "transformation_ids": [
+          "t6"
+        ],
+        "mitigation": "Wrap the aggregate as coalesce(sum(revenue), 0.0)."
+      },
+      {
+        "id": "r3",
+        "category": "type_coercion",
+        "severity": "medium",
+        "description": "The age column profiles as float64, not int64, because pandas promotes int64 to float64 in the presence of nulls. Declaring IntegerType in Spark would produce a schema mismatch against the reference output.",
+        "transformation_ids": [
+          "t1",
+          "t3"
+        ],
+        "mitigation": "Declare an explicit schema with age as DoubleType instead of relying on inferSchema."
+      },
+      {
+        "id": "r4",
+        "category": "row_order",
+        "severity": "low",
+        "description": "pandas merge preserves left-frame row order; Spark join does not. Any positional comparison of the two outputs would be meaningless.",
+        "transformation_ids": [
+          "t5"
+        ],
+        "mitigation": "Compare outputs on the country key with row order ignored."
+      },
+      {
+        "id": "r5",
+        "category": "index_semantics",
+        "severity": "low",
+        "description": "reset_index() has no Spark equivalent. Emitting a monotonically_increasing_id column to imitate it would add a column the reference output does not have and would be non-deterministic across runs.",
+        "transformation_ids": [
+          "t7"
+        ],
+        "mitigation": "Emit no code for t7."
+      }
+    ],
+    "dependencies": [
+      "pandas",
+      "os"
+    ],
+    "assumptions": [
+      "Input CSVs carry a header row; confirmed by the profiler reading named columns.",
+      "The 18 in MIN_AGE is a legal adulthood threshold and is not environment-dependent."
+    ],
+    "confidence": 0.92
+  },
+  "plan": {
+    "summary": "Nine transformations map onto eight Spark constructs; reset_index maps to nothing. The migration is dominated by two null-semantics differences around the country group key and all-null revenue groups, both of which change reported business numbers rather than merely row order, so the overall risk is HIGH and human approval is required before deployment.",
+    "steps": [
+      {
+        "id": "s1",
+        "transformation_id": "t1",
+        "kind": "read",
+        "legacy_construct": "pandas.read_csv",
+        "spark_construct": "SparkSession.read.csv with an explicit StructType",
+        "rationale": "An explicit schema is used rather than inferSchema because the profiler showed age is float64 only because of nulls; inferSchema would produce IntegerType and break the schema comparison.",
+        "semantic_differences": [
+          {
+            "category": "type_coercion",
+            "description": "pandas promotes an int column containing nulls to float64; Spark inferSchema would choose IntegerType and reject the nulls.",
+            "mitigation": "Declare age as DoubleType in an explicit StructType.",
+            "validation_check": "schema"
+          }
+        ],
+        "risk_level": "medium"
+      },
+      {
+        "id": "s2",
+        "transformation_id": "t2",
+        "kind": "read",
+        "legacy_construct": "pandas.read_csv",
+        "spark_construct": "SparkSession.read.csv with an explicit StructType",
+        "rationale": "Same explicit-schema reasoning; price is float64 and quantity int64.",
+        "semantic_differences": [],
+        "risk_level": "low"
+      },
+      {
+        "id": "s3",
+        "transformation_id": "t3",
+        "kind": "filter",
+        "legacy_construct": "boolean mask df[df['age'] >= 18]",
+        "spark_construct": "DataFrame.filter(F.col('age') >= F.lit(18))",
+        "rationale": "Direct mapping. A null age yields null in Spark and False in pandas; filter drops the row in both cases, so behaviour matches for >=.",
+        "semantic_differences": [
+          {
+            "category": "null_semantics",
+            "description": "NaN >= 18 is False in pandas; null >= 18 is null in Spark. Both drop the row under a filter, so this comparison is safe, but the same would not hold for a != comparison.",
+            "mitigation": "Keep the >= form; do not rewrite as a negated condition.",
+            "validation_check": "row_count"
+          }
+        ],
+        "risk_level": "low"
+      },
+      {
+        "id": "s4",
+        "transformation_id": "t4",
+        "kind": "derive_column",
+        "legacy_construct": "df['revenue'] = df['quantity'] * df['price']",
+        "spark_construct": "DataFrame.withColumn('revenue', F.col('quantity') * F.col('price'))",
+        "rationale": "Direct mapping. int * double promotes to double in both engines, so no explicit cast is needed.",
+        "semantic_differences": [
+          {
+            "category": "floating_point",
+            "description": "Double multiplication can differ in the last ulp between NumPy and the JVM.",
+            "mitigation": "Compare revenue with a relative tolerance rather than exact equality.",
+            "validation_check": "numeric_tolerance"
+          }
+        ],
+        "risk_level": "low"
+      },
+      {
+        "id": "s5",
+        "transformation_id": "t5",
+        "kind": "join",
+        "legacy_construct": "pandas.DataFrame.merge(on='customer_id', how='left')",
+        "spark_construct": "DataFrame.join(F.broadcast(orders), on='customer_id', how='left')",
+        "rationale": "The profiler measured orders at 159 KB, far below the 10 MB broadcast threshold, so broadcasting the right side removes the shuffle. Both key columns are int64, so no coercion is needed.",
+        "semantic_differences": [
+          {
+            "category": "row_order",
+            "description": "pandas merge preserves left-frame order; Spark join does not.",
+            "mitigation": "Never compare positionally; the validation plan keys on country.",
+            "validation_check": "row_count"
+          },
+          {
+            "category": "duplicate_explosion",
+            "description": "customer_id repeats in orders, so the join multiplies customer rows. Identical in both engines, but it must be confirmed rather than assumed.",
+            "mitigation": "Compare duplicate counts on both outputs after the join.",
+            "validation_check": "duplicate_counts"
+          }
+        ],
+        "risk_level": "medium"
+      },
+      {
+        "id": "s6",
+        "transformation_id": "t6",
+        "kind": "aggregate",
+        "legacy_construct": "df.groupby('country')['revenue'].sum()",
+        "spark_construct": "filter(col('country').isNotNull()).groupBy('country').agg(coalesce(sum('revenue'), lit(0.0)).alias('revenue'))",
+        "rationale": "Two corrections are folded into one step. pandas groupby defaults to dropna=True so null countries must be filtered explicitly, and pandas sum of an all-NaN group is 0.0 where Spark returns null. The alias is mandatory: without it Spark names the column 'sum(revenue)'.",
+        "semantic_differences": [
+          {
+            "category": "null_semantics",
+            "description": "63 customers have a null country. pandas drops them; Spark would emit an extra null group, changing both the row count and the totals.",
+            "mitigation": "Filter country IS NOT NULL before groupBy.",
+            "validation_check": "row_count"
+          },
+          {
+            "category": "null_semantics",
+            "description": "pandas sum of an all-NaN group is 0.0; Spark sum is null. Reachable because roughly 400 customers have no orders.",
+            "mitigation": "coalesce(sum(revenue), 0.0).",
+            "validation_check": "null_counts"
+          }
+        ],
+        "risk_level": "high"
+      },
+      {
+        "id": "s7",
+        "transformation_id": "t7",
+        "kind": "reset_index",
+        "legacy_construct": "df.reset_index()",
+        "spark_construct": "(none - pandas index bookkeeping)",
+        "rationale": "Spark DataFrames have no index and aggregations already return flat frames. Synthesising a monotonically_increasing_id would add a column the reference output lacks and would not be reproducible.",
+        "semantic_differences": [
+          {
+            "category": "index_semantics",
+            "description": "The pandas index is not part of the written output because to_csv is called with index=False.",
+            "mitigation": "Emit no code and no extra column.",
+            "validation_check": "schema"
+          }
+        ],
+        "risk_level": "low"
+      },
+      {
+        "id": "s8",
+        "transformation_id": "t8",
+        "kind": "sort",
+        "legacy_construct": "df.sort_values(by='country')",
+        "spark_construct": "DataFrame.orderBy(F.col('country').asc_nulls_last())",
+        "rationale": "pandas places NaN last on an ascending sort while Spark places null first, so asc_nulls_last is required to match even though null countries were already filtered out at s6.",
+        "semantic_differences": [
+          {
+            "category": "row_order",
+            "description": "Spark orderBy is not a stable sort; ties may be ordered differently. country is unique after the aggregation, so no tie is possible.",
+            "mitigation": "None needed; uniqueness of the group key makes the sort total.",
+            "validation_check": "row_count"
+          }
+        ],
+        "risk_level": "low"
+      },
+      {
+        "id": "s9",
+        "transformation_id": "t9",
+        "kind": "write",
+        "legacy_construct": "df.to_csv(path, index=False)",
+        "spark_construct": "DataFrame.write.mode('overwrite').option('header', True).csv(dir)",
+        "rationale": "Spark writes a directory of part files where pandas writes one file. coalesce(1) is deliberately not used: it funnels the whole dataset through a single task, and the differ reads directories.",
+        "semantic_differences": [
+          {
+            "category": "scale",
+            "description": "Output is a directory of part files rather than a single CSV.",
+            "mitigation": "The differ reads the output directory; downstream consumers needing one file should coalesce at consumption time, not here.",
+            "validation_check": "schema"
+          }
+        ],
+        "risk_level": "low"
+      }
+    ],
+    "execution_strategy": {
+      "shuffle_partitions": 8,
+      "adaptive_query_execution": true,
+      "broadcast_datasets": [
+        "orders"
+      ],
+      "cache_datasets": [],
+      "repartition_by": [],
+      "notes": [
+        "shuffle_partitions lowered from the 200 default because both inputs are under 200 KB; 200 partitions would create far more tasks than data.",
+        "AQE left on so partition coalescing adapts if this pipeline is later run against production-scale inputs."
+      ]
+    },
+    "validation_plan": {
+      "join_keys": [
+        "country"
+      ],
+      "numeric_tolerance": 1e-6,
+      "ignore_row_order": true,
+      "required_checks": [
+        "schema",
+        "row_count",
+        "null_counts",
+        "numeric_tolerance",
+        "duplicate_counts",
+        "aggregate_checksums"
+      ]
+    },
+    "high_risk_transformation_ids": [
+      "t6"
+    ],
+    "overall_risk": "high",
+    "requires_human_approval": true
+  },
+  "codegen": {
+    "code": {
+      "filename": "legacy_pipeline_spark.py",
+      "content": "\"\"\"PySpark migration of examples/customer_pipeline/legacy_pipeline.py.\n\nGenerated by the Autonomous ETL Migration Agent.\n\nSemantic parity notes (each one is checked by the data validation stage):\n\n* `age` is read as DoubleType, not IntegerType. The legacy pandas frame holds\n  float64 because the column contains nulls, and pandas silently promotes int64\n  to float64 in that case. Declaring IntegerType here would make the schema\n  comparison fail.\n* Rows with a null `country` are filtered out before the aggregation. pandas\n  `groupby` defaults to `dropna=True` and drops them; Spark `groupBy` would keep\n  null as its own group and produce one extra output row.\n* `sum` is wrapped in `coalesce(..., 0.0)`. pandas returns 0.0 for a group whose\n  values are all NaN; Spark returns null.\n* `orderBy` uses `asc_nulls_last` to match pandas sort semantics for NaN.\n* No index column is emitted. `reset_index()` is pandas bookkeeping with no\n  Spark equivalent; synthesising one would break the schema comparison.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pyspark.sql import SparkSession\nfrom pyspark.sql import functions as F\nfrom pyspark.sql.types import (\n    DoubleType,\n    IntegerType,\n    StringType,\n    StructField,\n    StructType,\n)\n\nMIN_AGE = 18\n\nCUSTOMERS_SCHEMA = StructType(\n    [\n        StructField(\"customer_id\", IntegerType(), nullable=True),\n        StructField(\"name\", StringType(), nullable=True),\n        StructField(\"age\", DoubleType(), nullable=True),\n        StructField(\"country\", StringType(), nullable=True),\n        StructField(\"signup_date\", StringType(), nullable=True),\n    ]\n)\n\nORDERS_SCHEMA = StructType(\n    [\n        StructField(\"order_id\", IntegerType(), nullable=True),\n        StructField(\"customer_id\", IntegerType(), nullable=True),\n        StructField(\"product\", StringType(), nullable=True),\n        StructField(\"quantity\", IntegerType(), nullable=True),\n        StructField(\"price\", DoubleType(), nullable=True),\n        StructField(\"order_date\", StringType(), nullable=True),\n    ]\n)\n\n\ndef run(spark: SparkSession, input_dir: str, output_dir: str) -> None:\n    \"\"\"Compute total revenue per country for adult customers.\"\"\"\n    customers = spark.read.csv(\n        f\"{input_dir}/customers.csv\", header=True, schema=CUSTOMERS_SCHEMA\n    )\n    orders = spark.read.csv(f\"{input_dir}/orders.csv\", header=True, schema=ORDERS_SCHEMA)\n\n    # t3: null ages compare as null and are dropped by filter, matching the\n    # pandas NaN >= 18 -> False behaviour.\n    adults = customers.filter(F.col(\"age\") >= F.lit(MIN_AGE))\n\n    # t4: int * double promotes to double in both engines.\n    orders_with_revenue = orders.withColumn(\n        \"revenue\", F.col(\"quantity\") * F.col(\"price\")\n    )\n\n    # t5: left join keeps adults with no orders; their revenue is null.\n    # `orders` measured at 159 KB by the profiler, well under the broadcast\n    # threshold, so the shuffle is avoided.\n    joined = adults.join(\n        F.broadcast(orders_with_revenue), on=\"customer_id\", how=\"left\"\n    )\n\n    # t6: drop null group keys to match pandas groupby(dropna=True), then\n    # coalesce so an all-null group sums to 0.0 as pandas does.\n    revenue_by_country = (\n        joined.filter(F.col(\"country\").isNotNull())\n        .groupBy(\"country\")\n        .agg(F.coalesce(F.sum(\"revenue\"), F.lit(0.0)).alias(\"revenue\"))\n    )\n\n    # t7: reset_index() has no Spark equivalent and is intentionally not emitted.\n    # t8: match pandas NaN-last sort ordering.\n    ordered = revenue_by_country.orderBy(F.col(\"country\").asc_nulls_last())\n\n    ordered.write.mode(\"overwrite\").option(\"header\", True).csv(\n        f\"{output_dir}/revenue_by_country\"\n    )\n",
+      "entrypoint": "run",
+      "imports_used": [
+        "pyspark.sql.SparkSession",
+        "pyspark.sql.functions",
+        "pyspark.sql.types"
+      ],
+      "notes": [
+        "First submission was rejected by the static gate for creating its own SparkSession (GATE008) and for writing output via toPandas() (GATE005). Both are fixed here: the session is the injected one and the write goes through the Spark CSV writer.",
+        "Null countries are filtered before groupBy to reproduce pandas dropna=True. Without this the Spark output would carry one extra row and a different total.",
+        "The aggregate is coalesced to 0.0 so an all-null revenue group matches pandas.",
+        "orders is broadcast on the strength of the measured 159 KB file size, not a guess.",
+        "No code is emitted for reset_index; adding an index column would break schema parity.",
+        "Output is a directory of part files. The differ handles that; a coalesce(1) would serialise the whole write through one task for no benefit here."
+      ]
+    },
+    "static_analysis": {
+      "passed": true,
+      "findings": []
+    },
+    "gate_iterations": 2
+  },
+  "validation": {
+    "report": {
+      "migration_id": "mig-20260819T112356-dd7f5f32",
+      "reference": {
+        "path": ".workspace/mig-20260819T112356-dd7f5f32/reference_output/revenue_by_country.csv",
+        "row_count": 5,
+        "columns": [
+          {
+            "name": "country",
+            "dtype": "object",
+            "null_count": 0,
+            "distinct_count": 5,
+            "numeric_sum": null,
+            "numeric_min": null,
+            "numeric_max": null
+          },
+          {
+            "name": "revenue",
+            "dtype": "float64",
+            "null_count": 0,
+            "distinct_count": 5,
+            "numeric_sum": 4251319.84,
+            "numeric_min": 787478.22,
+            "numeric_max": 913905.3
+          }
+        ],
+        "duplicate_row_count": 0,
+        "duplicate_key_count": 0
+      },
+      "candidate": {
+        "path": ".workspace/mig-20260819T112356-dd7f5f32/candidate_output/revenue_by_country",
+        "row_count": 5,
+        "columns": [
+          {
+            "name": "country",
+            "dtype": "object",
+            "null_count": 0,
+            "distinct_count": 5,
+            "numeric_sum": null,
+            "numeric_min": null,
+            "numeric_max": null
+          },
+          {
+            "name": "revenue",
+            "dtype": "float64",
+            "null_count": 0,
+            "distinct_count": 5,
+            "numeric_sum": 4251319.839999999,
+            "numeric_min": 787478.2199999993,
+            "numeric_max": 913905.3000000007
+          }
+        ],
+        "duplicate_row_count": 0,
+        "duplicate_key_count": 0
+      },
+      "checks": [
+        {
+          "name": "schema",
+          "passed": true,
+          "detail": "2 reference columns, 2 candidate columns",
+          "differences": [],
+          "skipped": false
+        },
+        {
+          "name": "row_count",
+          "passed": true,
+          "detail": "reference=5 candidate=5",
+          "differences": [],
+          "skipped": false
+        },
+        {
+          "name": "null_counts",
+          "passed": true,
+          "detail": "compared 2 shared columns",
+          "differences": [],
+          "skipped": false
+        },
+        {
+          "name": "numeric_tolerance",
+          "passed": true,
+          "detail": "compared 5 records keyed on ['country'] at tolerance 1e-06",
+          "differences": [],
+          "skipped": false
+        },
+        {
+          "name": "duplicate_counts",
+          "passed": true,
+          "detail": "reference=0 candidate=0 duplicate rows",
+          "differences": [],
+          "skipped": false
+        },
+        {
+          "name": "aggregate_checksums",
+          "passed": true,
+          "detail": "checksummed 2 shared columns",
+          "differences": [],
+          "skipped": false
+        }
+      ],
+      "error": null,
+      "status": "PASS",
+      "schema_match": true,
+      "row_count_match": true,
+      "numeric_tolerance_passed": true,
+      "differences": []
+    },
+    "legacy_execution": {
+      "engine": "pandas",
+      "succeeded": true,
+      "duration_seconds": 0.5798,
+      "output_path": ".workspace/mig-20260819T112356-dd7f5f32/reference_output/revenue_by_country.csv",
+      "stdout_tail": "",
+      "stderr_tail": "",
+      "exit_code": 0,
+      "timed_out": false,
+      "error": null,
+      "metrics": {
+        "engine": "pandas"
+      }
+    },
+    "spark_execution": {
+      "engine": "spark",
+      "succeeded": true,
+      "duration_seconds": 21.5694,
+      "output_path": ".workspace/mig-20260819T112356-dd7f5f32/candidate_output/revenue_by_country",
+      "stdout_tail": "",
+      "stderr_tail": "WARNING: Using incubator modules: jdk.incubator.vector\nUsing Spark's default log4j profile: org/apache/spark/log4j2-defaults.properties\n26/08/19 12:24:01 WARN Utils: Your hostname, LAPTOP-4J4UHOJQ, resolves to a loopback address: 127.0.1.1; using 10.255.255.254 instead (on interface lo)\n26/08/19 12:24:01 WARN Utils: Set SPARK_LOCAL_IP if you need to bind to another address\nUsing Spark's default log4j profile: org/apache/spark/log4j2-defaults.properties\nSetting default log level to \"WARN\".\nTo adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).\n26/08/19 12:24:02 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable\n\n[Stage 0:>                                                          (0 + 1) / 1]\n\n                                                                                \n\n[Stage 1:>                                                          (0 + 1) / 1]\n\n                                                                                \n",
+      "exit_code": 0,
+      "timed_out": false,
+      "error": null,
+      "metrics": {
+        "engine": "spark",
+        "spark_version": "4.2.0",
+        "shuffle_partitions": "8",
+        "adaptive_enabled": "true",
+        "default_parallelism": "2",
+        "app_id": "local-1787138644090",
+        "jobs": "5",
+        "stages": "9",
+        "tasks": "9"
+      }
+    },
+    "tests": null,
+    "test_run": null,
+    "diagnosis": null
+  },
+  "repair": null,
+  "optimization": null,
+  "delivery": {
+    "decision": {
+      "disposition": "ready",
+      "labels": [
+        "autonomous-etl",
+        "high-risk"
+      ],
+      "reason": "validation passed on executed output; ready for review"
+    },
+    "branch": null,
+    "pull_request": null,
+    "files": [],
+    "audit": {
+      "violations": [],
+      "checked": 1,
+      "passed": true
+    },
+    "narrative_revisions": 0,
+    "skipped_reason": null,
+    "opened": false
+  },
+  "stages": [
+    {
+      "stage": "discovery",
+      "started_at": "2026-08-19T11:23:56.280130Z",
+      "ended_at": "2026-08-19T11:23:56.337638Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "tools=['inspect_legacy_source', 'profile_input_data', 'profile_input_data']"
+    },
+    {
+      "stage": "planning",
+      "started_at": "2026-08-19T11:23:56.337697Z",
+      "ended_at": "2026-08-19T11:23:56.395484Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "risk=high"
+    },
+    {
+      "stage": "approval",
+      "started_at": "2026-08-19T11:23:56.395507Z",
+      "ended_at": "2026-08-19T11:23:56.395724Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "approved by local-auto-approve: auto-approved by the local pipeline"
+    },
+    {
+      "stage": "code_generation",
+      "started_at": "2026-08-19T11:23:56.395746Z",
+      "ended_at": "2026-08-19T11:23:56.414659Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "gate_submissions=2"
+    },
+    {
+      "stage": "static_analysis",
+      "started_at": "2026-08-19T11:23:56.414694Z",
+      "ended_at": "2026-08-19T11:23:56.416613Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "findings=0"
+    },
+    {
+      "stage": "validation",
+      "started_at": "2026-08-19T11:23:56.416658Z",
+      "ended_at": "2026-08-19T11:24:22.912974Z",
+      "succeeded": true,
+      "attempt": 1,
+      "detail": "status=PASS"
+    },
+    {
+      "stage": "pull_request",
+      "started_at": "2026-08-19T11:24:22.913041Z",
+      "ended_at": null,
+      "succeeded": null,
+      "attempt": 1,
+      "detail": null
+    }
+  ],
+  "artifact_dir": null,
+  "failed": false,
+  "failure_reason": null
+}
